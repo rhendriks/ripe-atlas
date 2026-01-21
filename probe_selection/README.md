@@ -1,6 +1,6 @@
 # Probe Selection Scripts
 
-This directory contains scripts to create lists of RIPE Atlas probe IDs.
+This directory contains scripts to create lists of RIPE Atlas probe IDs and enrich data with probe metadata.
 
 ## Purpose
 
@@ -8,6 +8,7 @@ Use these scripts to:
 - Select probes based on specific criteria (location, tags, status, etc.)
 - Generate probe ID lists for measurements
 - Filter probes by availability, connectivity type, or other attributes
+- Add probe metadata to CSV files with probe IDs
 
 ## Usage
 
@@ -37,6 +38,40 @@ for probe in probes:
 
 print(f"Found {len(probe_list)} probes")
 print(probe_list)
+```
+
+## Scripts
+
+### get_probe_data.py
+
+Adds probe metadata to CSV.GZ files containing a `probe_id` column.
+
+**Usage:**
+```bash
+python3 get_probe_data.py input_file.csv.gz
+```
+
+**Options:**
+- `-o, --output`: Specify output file path (default: `input_file_enriched.csv.gz`)
+
+**Added columns:**
+- `country`: Country code (e.g., "NL", "US")
+- `city`: City name
+- `lat`: Latitude
+- `lon`: Longitude
+- `ipv4`: IPv4 address
+- `ipv6`: IPv6 address
+- `asn`: Autonomous System Number
+
+Unknown values will be `NaN`.
+
+**Example:**
+```bash
+# Add probe metadata to a CSV file
+python3 probe_selection/get_probe_data.py measurements.csv.gz
+
+# Specify custom output file
+python3 probe_selection/get_probe_data.py measurements.csv.gz -o enriched_measurements.csv.gz
 ```
 
 ## Resources
