@@ -35,8 +35,9 @@ A collection of scripts for working with [RIPE Atlas](https://atlas.ripe.net/), 
 .
 ├── probe_selection/     # Scripts to select and filter RIPE Atlas probes
 ├── measurements/        # Scripts to create and run measurements
-├── .env.example        # Example environment configuration
-└── .env                # Your local environment configuration (not tracked in git)
+├── analysis/            # Scripts to analyse measurement results
+├── .env.example         # Example environment configuration
+└── .env                 # Your local environment configuration (not tracked in git)
 ```
 
 ## Directories
