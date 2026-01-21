@@ -2,30 +2,40 @@
 """
 Simple RIPE Atlas Ping Script
 
-This script performs ping measurements using RIPE Atlas probes and exports
-the results to a compressed CSV file.
+Performs a simple ping measurement and saves results as .csv.gz
 
 Usage:
-    python simple_ping.py --probes <probe_ids> --targets <target_ips> [options]
+    python simple_ping.py --probes <probe_ids|probe-ids.txt> --targets <target_ips|hitlist.txt> [options]
     python simple_ping.py --probes ALL --targets 8.8.8.8 --output results.csv.gz
 
 Arguments:
-    --probes: Comma-separated list of probe IDs or 'ALL' for all available probes
-    --targets: Comma-separated list of target IP addresses or hostnames
+    --probes: Comma-separated list of probe IDs (or path to a probe-id file), or 'ALL' for all available probes
+    --targets: Comma-separated list of target IP addresses or hostnames (or path to a hitlist file)
     --output: Output file name (default: ping_results_<timestamp>.csv.gz)
     --packets: Number of ping packets to send (default: 3)
     --wait: Time to wait for measurement completion in seconds (default: 300)
+
+TODOs:
+* Support hitlist and probe-id files
+* ALL fails due to the 1k probes maximum per measurement
+* print credit costs before (wait for y/n from user)
+
+
+example:
+ping 8.8.8.8 from all probes
+python simple_ping.py --probes ALL --target 8.8.8.8
 """
 
 import argparse
 import csv
 import gzip
-import json
 import os
 import sys
 import time
 from datetime import datetime
 from typing import List, Dict, Any
+from dotenv import load_dotenv
+load_dotenv()
 
 try:
     from ripe.atlas.cousteau import (
@@ -40,6 +50,8 @@ except ImportError:
     print("Install it with: pip install ripe.atlas.cousteau")
     sys.exit(1)
 
+# API limit defined by RIPE Atlas
+MAX_PROBES_PER_MEASUREMENT = 1000
 
 def load_api_key() -> str:
     """Load RIPE Atlas API key from environment variable."""
@@ -64,7 +76,7 @@ def get_all_probe_ids() -> List[int]:
     for probe in probes:
         probe_ids.append(probe["id"])
     
-    print(f"Found {len(probe_ids)} connected probes")
+    print(f"Found {len(probe_ids):,} connected probes")
     return probe_ids
 
 
@@ -100,32 +112,38 @@ def parse_target_list(target_arg: str) -> List[str]:
     """
     return [t.strip() for t in target_arg.split(',')]
 
+def chunk_list(lst, n):
+    """Split a list into chunks of size n."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
 
 def create_ping_measurement(
     api_key: str,
     probes: List[int],
     target: str,
-    packets: int = 3
+    packets: int = 3,
+    chunk_index: int = 1,
 ) -> int:
     """
-    Create a ping measurement.
+    Create a ping measurement for a chunk of probes.
     
     Args:
         api_key: RIPE Atlas API key
         probes: List of probe IDs
         target: Target IP or hostname
         packets: Number of ping packets
+        chunk_index: Chunk index
     
     Returns:
         Measurement ID
     """
-    print(f"Creating ping measurement to {target} with {len(probes)} probes...")
+    print(f"Creating ping measurement to {target} with {len(probes):,} probes... (Chunk {chunk_index})")
     
     # Define ping measurement
     ping = Ping(
         af=4,  # IPv4
         target=target,
-        description=f"Simple ping to {target}",
+        description=f"Simple ping to {target} (Chunk {chunk_index})",
         packets=packets
     )
     
@@ -311,8 +329,8 @@ def main():
     probes = parse_probe_list(args.probes)
     targets = parse_target_list(args.targets)
     
-    print(f"Using {len(probes)} probes")
-    print(f"Targeting {len(targets)} destination(s): {', '.join(targets)}")
+    print(f"Using {len(probes):,} probes")
+    print(f"Targeting {len(targets):,} destination(s): {', '.join(targets)}")
     
     # Set default output file if not provided
     if not args.output:
@@ -324,14 +342,15 @@ def main():
     
     # Create measurements for each target
     measurement_ids = []
+
     for target in targets:
-        measurement_id = create_ping_measurement(
-            api_key,
-            probes,
-            target,
-            args.packets
-        )
-        measurement_ids.append(measurement_id)
+        print(f"Targeting: {target}")
+        # Split probes into chunks of 1k
+        for idx, probe_chunk in enumerate(chunk_list(probes, MAX_PROBES_PER_MEASUREMENT), 1):
+            msm_id = create_ping_measurement(api_key, probe_chunk, target, args.packets, idx)
+            measurement_ids.append(msm_id)
+            # Short sleep to avoid hitting API rate limits or overwhelming target
+            time.sleep(1)
     
     # Wait for measurements to complete
     wait_for_measurement(measurement_ids[0], args.wait)
