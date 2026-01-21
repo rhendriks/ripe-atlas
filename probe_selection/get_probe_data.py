@@ -15,7 +15,6 @@ Unknown values for a particular probe will be NaN.
 """
 
 import argparse
-import gzip
 import json
 import os
 import sys
@@ -23,6 +22,18 @@ from pathlib import Path
 
 import pandas as pd
 import requests
+
+
+# Default metadata structure for probes with missing/unavailable data
+DEFAULT_METADATA = {
+    'country': None,
+    'city': None,
+    'lat': None,
+    'lon': None,
+    'ipv4': None,
+    'ipv6': None,
+    'asn': None,
+}
 
 
 def fetch_probe_metadata(probe_id):
@@ -42,12 +53,16 @@ def fetch_probe_metadata(probe_id):
         response.raise_for_status()
         data = response.json()
         
+        # Extract coordinates once to avoid repeated lookups
+        geometry = data.get('geometry')
+        coordinates = geometry.get('coordinates', [None, None]) if geometry else [None, None]
+        
         # Extract metadata from the response
         metadata = {
             'country': data.get('country_code'),
             'city': data.get('city'),
-            'lat': data.get('geometry', {}).get('coordinates', [None, None])[1] if data.get('geometry') else None,
-            'lon': data.get('geometry', {}).get('coordinates', [None, None])[0] if data.get('geometry') else None,
+            'lat': coordinates[1],
+            'lon': coordinates[0],
             'ipv4': data.get('address_v4'),
             'ipv6': data.get('address_v6'),
             'asn': data.get('asn_v4'),
@@ -57,15 +72,7 @@ def fetch_probe_metadata(probe_id):
         
     except (requests.RequestException, json.JSONDecodeError, KeyError) as e:
         print(f"Warning: Could not fetch metadata for probe {probe_id}: {e}", file=sys.stderr)
-        return {
-            'country': None,
-            'city': None,
-            'lat': None,
-            'lon': None,
-            'ipv4': None,
-            'ipv6': None,
-            'asn': None,
-        }
+        return DEFAULT_METADATA.copy()
 
 
 def add_probe_metadata(input_file, output_file=None):
@@ -113,28 +120,20 @@ def add_probe_metadata(input_file, output_file=None):
         if pd.notna(probe_id):
             if i % 10 == 0:
                 print(f"Progress: {i}/{len(unique_probe_ids)} probes")
-            probe_metadata[probe_id] = fetch_probe_metadata(int(probe_id))
+            try:
+                probe_metadata[probe_id] = fetch_probe_metadata(int(probe_id))
+            except (ValueError, TypeError) as e:
+                print(f"Warning: Invalid probe_id '{probe_id}': {e}", file=sys.stderr)
+                probe_metadata[probe_id] = DEFAULT_METADATA.copy()
         else:
-            probe_metadata[probe_id] = {
-                'country': None,
-                'city': None,
-                'lat': None,
-                'lon': None,
-                'ipv4': None,
-                'ipv6': None,
-                'asn': None,
-            }
+            probe_metadata[probe_id] = DEFAULT_METADATA.copy()
     
     print("Adding metadata columns to dataframe...")
     
-    # Add metadata columns to the dataframe
-    df['country'] = df['probe_id'].map(lambda x: probe_metadata.get(x, {}).get('country'))
-    df['city'] = df['probe_id'].map(lambda x: probe_metadata.get(x, {}).get('city'))
-    df['lat'] = df['probe_id'].map(lambda x: probe_metadata.get(x, {}).get('lat'))
-    df['lon'] = df['probe_id'].map(lambda x: probe_metadata.get(x, {}).get('lon'))
-    df['ipv4'] = df['probe_id'].map(lambda x: probe_metadata.get(x, {}).get('ipv4'))
-    df['ipv6'] = df['probe_id'].map(lambda x: probe_metadata.get(x, {}).get('ipv6'))
-    df['asn'] = df['probe_id'].map(lambda x: probe_metadata.get(x, {}).get('asn'))
+    # Add metadata columns to the dataframe using a single map operation
+    metadata_df = df['probe_id'].map(lambda x: probe_metadata.get(x, DEFAULT_METADATA)).apply(pd.Series)
+    for col in DEFAULT_METADATA.keys():
+        df[col] = metadata_df[col]
     
     # Write the enriched dataframe to output file
     print(f"Writing output file: {output_file}")
