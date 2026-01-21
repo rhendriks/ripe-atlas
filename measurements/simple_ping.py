@@ -19,6 +19,7 @@ TODOs:
 * Support hitlist and probe-id files
 * ALL fails due to the 1k probes maximum per measurement
 * print credit costs before (wait for y/n from user)
+* exit wait early when the requested measurements have all finished
 
 
 example:
@@ -200,7 +201,7 @@ def fetch_measurement_results(measurement_id: int) -> List[Dict[str, Any]]:
     is_success, results = AtlasResultsRequest(**kwargs).create()
     
     if is_success:
-        print(f"Retrieved {len(results)} results")
+        print(f"Retrieved {len(results):,} results")
         return results
     else:
         print(f"Error fetching results: {results}")
@@ -269,7 +270,7 @@ def write_results_to_csv(results: List[Dict[str, Any]], output_file: str):
         results: List of parsed results
         output_file: Output file path
     """
-    print(f"Writing {len(results)} results to {output_file}...")
+    print(f"Writing {len(results):,} results to {output_file}...")
     
     with gzip.open(output_file, 'wt', newline='') as csvfile:
         fieldnames = ['probe_id', 'rtt', 'hop_count']
@@ -364,7 +365,7 @@ def main():
     # Write results to CSV
     if all_results:
         write_results_to_csv(all_results, args.output)
-        print(f"\nSuccess! Total results: {len(all_results)}")
+        print(f"\nSuccess! Total results: {len(all_results):,}")
     else:
         print("Warning: No results were collected")
         sys.exit(1)
