@@ -20,6 +20,7 @@ TODOs:
 * ALL fails due to the 1k probes maximum per measurement
 * print credit costs before (wait for y/n from user)
 * exit wait early when the requested measurements have all finished
+* write output to output/ directory
 
 
 example:
