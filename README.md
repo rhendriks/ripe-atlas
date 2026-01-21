@@ -10,16 +10,21 @@ A collection of scripts for working with [RIPE Atlas](https://atlas.ripe.net/), 
    cd ripe-atlas
    ```
 
-2. Copy the example environment file and add your API key:
+2. Install required dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Copy the example environment file and add your API key:
    ```bash
    cp .env.example .env
    ```
 
-3. Edit `.env` and add your RIPE Atlas API key:
+4. Edit `.env` and add your RIPE Atlas API key:
    - Get your API key from: https://atlas.ripe.net/keys/
    - Replace `your_api_key_here` with your actual API key
 
-4. (Optional) Install the RIPE Atlas Python library:
+5. (Optional) Install the RIPE Atlas Python library:
    ```bash
    pip install ripe.atlas.cousteau
    ```
@@ -42,6 +47,7 @@ Contains scripts for selecting RIPE Atlas probes based on various criteria such 
 - AS number
 - Probe status and capabilities
 - Custom filters
+- **`get_probe_data.py`**: Enrich CSV.GZ files with probe metadata (country, city, coordinates, IP addresses, ASN)
 
 See [probe_selection/README.md](probe_selection/README.md) for more details.
 
