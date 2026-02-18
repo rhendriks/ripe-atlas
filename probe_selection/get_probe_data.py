@@ -17,6 +17,7 @@ Public Functions:
     enrich_dataframe_with_probe_metadata(df, verbose=True): 
         Enriches a pandas DataFrame containing a 'probe_id' column with probe metadata.
         Can be imported for use in notebooks or other scripts.
+
 """
 
 import argparse
