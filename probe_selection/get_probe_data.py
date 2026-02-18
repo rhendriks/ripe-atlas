@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to add probe metadata to CSV files.
+Script to add probe metadata to CSV files or pandas DataFrames.
 
 Takes a .csv.gz file with a 'probe_id' column and adds metadata for each probe:
 - country
@@ -12,6 +12,11 @@ Takes a .csv.gz file with a 'probe_id' column and adds metadata for each probe:
 - asn
 
 Unknown values for a particular probe will be NaN.
+
+Public Functions:
+    enrich_dataframe_with_probe_metadata(df, verbose=True): 
+        Enriches a pandas DataFrame containing a 'probe_id' column with probe metadata.
+        Can be imported for use in notebooks or other scripts.
 """
 
 import argparse
@@ -75,6 +80,81 @@ def fetch_probe_metadata(probe_id):
         return DEFAULT_METADATA.copy()
 
 
+def enrich_dataframe_with_probe_metadata(df, verbose=True):
+    """
+    Add probe metadata columns to a pandas DataFrame containing a 'probe_id' column.
+    
+    This function enriches a DataFrame with probe metadata fetched from the RIPE Atlas API.
+    For each unique probe_id, it fetches and adds the following columns:
+    - country: Country code
+    - city: City name
+    - lat: Latitude
+    - lon: Longitude
+    - ipv4: IPv4 address
+    - ipv6: IPv6 address
+    - asn: Autonomous System Number
+    
+    Args:
+        df: pandas DataFrame with a 'probe_id' column
+        verbose: If True, print progress messages (default: True)
+        
+    Returns:
+        pandas DataFrame: A copy of the input DataFrame with added metadata columns
+        
+    Raises:
+        ValueError: If the DataFrame does not contain a 'probe_id' column
+        
+    Example:
+        >>> import pandas as pd
+        >>> from probe_selection.get_probe_data import enrich_dataframe_with_probe_metadata
+        >>> df = pd.DataFrame({'probe_id': [1, 2, 3], 'value': [10, 20, 30]})
+        >>> enriched_df = enrich_dataframe_with_probe_metadata(df)
+        >>> print(enriched_df.columns)
+    """
+    # Check if 'probe_id' column exists
+    if 'probe_id' not in df.columns:
+        raise ValueError("DataFrame must contain a 'probe_id' column")
+    
+    # Create a copy to avoid modifying the original dataframe
+    result_df = df.copy()
+    
+    if verbose:
+        print(f"Found {len(result_df)} rows with probe IDs")
+    
+    # Get unique probe IDs to avoid duplicate API calls
+    unique_probe_ids = result_df['probe_id'].unique()
+    if verbose:
+        print(f"Fetching metadata for {len(unique_probe_ids)} unique probes...")
+    
+    # Fetch metadata for each unique probe
+    probe_metadata = {}
+    for i, probe_id in enumerate(unique_probe_ids, 1):
+        if pd.notna(probe_id):
+            if verbose and i % 10 == 0:
+                print(f"Progress: {i}/{len(unique_probe_ids)} probes")
+            try:
+                probe_metadata[probe_id] = fetch_probe_metadata(int(probe_id))
+            except (ValueError, TypeError) as e:
+                if verbose:
+                    print(f"Warning: Invalid probe_id '{probe_id}': {e}", file=sys.stderr)
+                probe_metadata[probe_id] = DEFAULT_METADATA.copy()
+        else:
+            probe_metadata[probe_id] = DEFAULT_METADATA.copy()
+    
+    if verbose:
+        print("Adding metadata columns to dataframe...")
+    
+    # Add metadata columns to the dataframe using a single map operation
+    metadata_df = result_df['probe_id'].map(lambda x: probe_metadata.get(x, DEFAULT_METADATA)).apply(pd.Series)
+    for col in DEFAULT_METADATA.keys():
+        result_df[col] = metadata_df[col]
+    
+    if verbose:
+        print(f"Successfully enriched {len(result_df)} rows")
+    
+    return result_df
+
+
 def add_probe_metadata(input_file, output_file=None):
     """
     Add probe metadata to a CSV.GZ file.
@@ -103,43 +183,18 @@ def add_probe_metadata(input_file, output_file=None):
         print(f"Error reading input file: {e}", file=sys.stderr)
         sys.exit(1)
     
-    # Check if 'probe_id' column exists
-    if 'probe_id' not in df.columns:
-        print("Error: Input file must contain a 'probe_id' column", file=sys.stderr)
+    # Enrich the dataframe using the public function
+    try:
+        enriched_df = enrich_dataframe_with_probe_metadata(df, verbose=True)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
-    
-    print(f"Found {len(df)} rows with probe IDs")
-    
-    # Get unique probe IDs to avoid duplicate API calls
-    unique_probe_ids = df['probe_id'].unique()
-    print(f"Fetching metadata for {len(unique_probe_ids)} unique probes...")
-    
-    # Fetch metadata for each unique probe
-    probe_metadata = {}
-    for i, probe_id in enumerate(unique_probe_ids, 1):
-        if pd.notna(probe_id):
-            if i % 10 == 0:
-                print(f"Progress: {i}/{len(unique_probe_ids)} probes")
-            try:
-                probe_metadata[probe_id] = fetch_probe_metadata(int(probe_id))
-            except (ValueError, TypeError) as e:
-                print(f"Warning: Invalid probe_id '{probe_id}': {e}", file=sys.stderr)
-                probe_metadata[probe_id] = DEFAULT_METADATA.copy()
-        else:
-            probe_metadata[probe_id] = DEFAULT_METADATA.copy()
-    
-    print("Adding metadata columns to dataframe...")
-    
-    # Add metadata columns to the dataframe using a single map operation
-    metadata_df = df['probe_id'].map(lambda x: probe_metadata.get(x, DEFAULT_METADATA)).apply(pd.Series)
-    for col in DEFAULT_METADATA.keys():
-        df[col] = metadata_df[col]
     
     # Write the enriched dataframe to output file
     print(f"Writing output file: {output_file}")
-    df.to_csv(output_file, compression='gzip', index=False)
+    enriched_df.to_csv(output_file, compression='gzip', index=False)
     
-    print(f"Successfully enriched {len(df)} rows and saved to {output_file}")
+    print(f"Successfully saved enriched data to {output_file}")
 
 
 def main():
