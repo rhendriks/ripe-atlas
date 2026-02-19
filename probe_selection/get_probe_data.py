@@ -41,7 +41,7 @@ DEFAULT_METADATA = {
     'asn': None,
 }
 
-
+# TODO slow for a large list of probes, faster to fetch all probe_ids at once and inner join later
 def fetch_probe_metadata(probe_id):
     """
     Fetch metadata for a single probe from RIPE Atlas API.
@@ -132,7 +132,7 @@ def enrich_dataframe_with_probe_metadata(df, verbose=True):
     for i, probe_id in enumerate(unique_probe_ids, 1):
         if pd.notna(probe_id):
             if verbose and i % 10 == 0:
-                print(f"Progress: {i}/{len(unique_probe_ids)} probes")
+                print(f"Progress: {i:,}/{len(unique_probe_ids):,} probes")
             try:
                 probe_metadata[probe_id] = fetch_probe_metadata(int(probe_id))
             except (ValueError, TypeError) as e:
