@@ -20,7 +20,7 @@ TODOs:
 * print credit costs before (wait for y/n from user)
 * exit wait early when the requested measurements have all finished
 * write output to output/ directory
-
+* support IPv6
 
 example:
 ping 8.8.8.8 from all probes
